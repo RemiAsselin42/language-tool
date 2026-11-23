@@ -64,4 +64,14 @@ JVM flags live in `lt-up.bat`: `-Xms128m -Xmx512m -XX:+UseSerialGC`.
 | `lt-up.bat` | Starts the server (idempotent: exits if already running) — JVM flags live here |
 | `fasttext/fasttext.exe` | Language detection binary (committed, Windows x64) |
 | `fasttext/lid.176.ftz` | Quantized language-ID model (committed) |
+| `fasttext/LICENSE` | fastText's MIT licence (covers `fasttext.exe`) |
 | `server/`, `server.properties` | Local-only, gitignored — created by `setup.ps1` |
+
+## Third-party components
+
+This repo redistributes two files from [fastText](https://github.com/facebookresearch/fastText):
+
+- `fasttext/fasttext.exe` — built from the fastText sources. MIT License, Copyright (c) 2016-present, Facebook, Inc. (full text in `fasttext/LICENSE`).
+- `fasttext/lid.176.ftz` — the official [language identification model](https://fasttext.cc/docs/en/language-identification.html), unmodified, distributed under the [Creative Commons Attribution-Share-Alike License 3.0](https://creativecommons.org/licenses/by-sa/3.0/).
+
+LanguageTool itself is not redistributed: `setup.ps1` downloads it from languagetool.org.
