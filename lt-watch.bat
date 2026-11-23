@@ -1,7 +1,8 @@
 @echo off
 cd /d "%~dp0"
 :loop
-tasklist /FI "IMAGENAME eq zen.exe" | find /I "zen.exe" >nul
+rem browsers.txt (written by setup.ps1) lists the process names to wait for, one per line
+tasklist /NH | findstr /I /B /L /G:"%~dp0browsers.txt" >nul
 if errorlevel 1 (
     timeout /t 15 /nobreak >nul
     goto loop

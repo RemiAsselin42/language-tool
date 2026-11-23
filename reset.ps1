@@ -18,7 +18,7 @@ try {
         ForEach-Object { Stop-Process -Id $_.ProcessId -Force; Wait-Process -Id $_.ProcessId -ErrorAction SilentlyContinue }
 
     # 3. Start it again through setup.ps1, which also repairs the config and checks that the server answers
-    & "$PSScriptRoot\setup.ps1"
+    & "$PSScriptRoot\setup.ps1" -KeepBrowsers
 }
 finally {
     # 4. Reopen Zen, also when the server failed to start
