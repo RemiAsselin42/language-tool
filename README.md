@@ -1,13 +1,13 @@
-# languagetool-local
+# language-tool
 
-Self-hosted [LanguageTool](https://github.com/languagetool-org/languagetool) server running natively on Windows (no Docker), with automatic startup whenever [Zen Browser](https://zen-browser.app/) is launched.
+Self-hosted [LanguageTool](https://github.com/languagetool-org/languagetool) server running natively on Windows (no Docker), started automatically the first time [Zen Browser](https://zen-browser.app/) is launched after login.
 
 **Why:** the official LanguageTool browser extension went Premium-only, but it still works with a self-hosted server — for free, with full privacy (text never leaves the machine).
 
 ## How it works
 
-- `lt-watch.vbs` runs invisibly at login and waits (near-zero cost) until `zen.exe` appears.
-- It then calls `lt-up.bat`, which starts the LanguageTool server as a background `javaw` process (port 8081, localhost only).
+- At login, a Startup shortcut runs `lt-watch.js` (Windows Script Host), which starts `lt-watch.bat` with no window; it waits (near-zero cost) until `zen.exe` appears.
+- It then calls `lt-up.bat`, which starts the LanguageTool server as a background `javaw` process (port 8081, localhost only), and exits. The server keeps running until logout, also after Zen is closed; nothing restarts it if it is killed before the next login (run `lt-up.bat` by hand).
 - The browser extension is set to **Local server** and talks to `http://localhost:8081/v2`.
 - Language detection: `fasttext/fasttext.exe` (MSVC build, committed) + the quantized `lid.176.ftz` model (<1 MB, committed) — near-identical accuracy to the full 130 MB model.
 
@@ -15,29 +15,20 @@ Self-hosted [LanguageTool](https://github.com/languagetool-org/languagetool) ser
 
 ## Setup (new machine)
 
-Everything needed is in the repo except Java, the LanguageTool zip, and one local config file:
-
-1. **Install Java 21:**
+1. **Run the setup script** from the repo root (safe to re-run):
 ```powershell
-   winget install -e --id EclipseAdoptium.Temurin.21.JRE
+   powershell -ExecutionPolicy Bypass -File setup.ps1
 ```
+   It does, in order:
+   - installs Java 21 (Temurin JRE, via winget) if the Java on the PATH is missing or older than 17;
+   - downloads [LanguageTool-stable.zip](https://languagetool.org/download/LanguageTool-stable.zip) and unpacks it, flattened, into `server/` (skipped if `server/languagetool-server.jar` exists; an interrupted run is simply redone);
+   - writes `server.properties` with this clone's absolute fastText paths;
+   - puts a `lt-watch` shortcut in the Startup folder (auto-start at login);
+   - starts the server and checks that <http://localhost:8081/v2/languages> answers — if it doesn't, it reruns the server in the foreground so the error is visible.
 
-2. **Get the LanguageTool server:** download
-   <https://languagetool.org/download/LanguageTool-stable.zip>
-   and unzip its *contents* directly into `server/` — the jar must end up at
-   `server/languagetool-server.jar` (flatten the extra `LanguageTool-x.y/` folder the zip creates).
+   The repo path may contain accents, but only characters of the Windows ANSI code page (on a Western European Windows, no Cyrillic, CJK, etc.): Java and fastText cannot open anything else, so the script refuses such a folder up front.
 
-3. **Create `server.properties`** at the repo root (gitignored — absolute local paths, escaped backslashes):
-```properties
-   fasttextBinary=C:\\path\\to\\languagetool-local\\fasttext\\fasttext.exe
-   fasttextModel=C:\\path\\to\\languagetool-local\\fasttext\\lid.176.ftz
-```
-
-4. **Enable auto-start:** `Win+R` → `shell:startup` → drop a shortcut to `lt-watch.vbs` there.
-
-5. **Configure the extension:** LanguageTool add-on options → server section → check **Local server**. No URL to type (8081 is the port the extension expects).
-
-6. **Verify:** launch Zen, wait a few seconds, open <http://localhost:8081/v2/languages> — a JSON list of languages means everything works.
+2. **Configure the extension:** LanguageTool add-on options → server section → check **Local server**. No URL to type (8081 is the port the extension expects).
 
 ## Tuning
 
@@ -46,6 +37,7 @@ JVM flags live in `lt-up.bat`: `-Xms128m -Xmx512m -XX:+UseSerialGC`.
 
 ## Troubleshooting
 
+- **Restart everything:** `powershell -ExecutionPolicy Bypass -File reset.ps1` asks Zen to close (like clicking the X of each window, never forced — it stops there if Zen stays open), kills the LanguageTool `javaw` process, re-runs `setup.ps1` to start and check the server, then reopens Zen. If Zen isn't running, only the server is restarted.
 - **Server won't start / detection seems off:** run it in a visible console:
 ```powershell
   java -cp ".\server\languagetool-server.jar" org.languagetool.server.HTTPServer --port 8081 --allow-origin --config ".\server.properties"
@@ -55,9 +47,10 @@ JVM flags live in `lt-up.bat`: `-Xms128m -Xmx512m -XX:+UseSerialGC`.
 ```powershell
   Get-CimInstance Win32_Process -Filter "name='javaw.exe'" | Select -Expand CommandLine
 ```
-  then `taskkill /f /im javaw.exe` and relaunch.
-- **`ClassNotFoundException`:** you're not running from the repo root, or the zip wasn't flattened into `server/` (step 2).
-- **Poor language detection:** fastText isn't loading — check the paths in `server.properties`. As a fallback, the full model works too: download `lid.176.bin` from <https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.bin> and point `fasttextModel` at it (+130 MB RAM).
+  then run `reset.ps1`.
+- **Moved or renamed the repo folder:** `server.properties` and the Startup shortcut hold absolute paths, and the server refuses to start on a wrong fastText path — re-run `setup.ps1`.
+- **`ClassNotFoundException`:** you're not running from the repo root, or `server/` is incomplete — delete `server/` and re-run `setup.ps1`.
+- **Poor language detection:** a wrong path in `server.properties` is not the cause — it stops the server from starting at all (see the first point). To rule out the quantized model, try the full one: download `lid.176.bin` from <https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.bin> and point `fasttextModel` at it (+130 MB RAM), then restart the server. Note that re-running `setup.ps1` rewrites `server.properties`.
 - **Stop the server manually:** `taskkill /f /im javaw.exe` (careful if other Java apps are running).
 - **`fasttext.exe` on a new architecture (ARM etc.):** recompile from [facebookresearch/fastText](https://github.com/facebookresearch/fastText) — with MSVC: `cl /O2 /EHsc /std:c++17 /Fe:fasttext.exe src\*.cc` from a *x64 Native Tools Command Prompt* (the CMake build's `fasttext-bin` target is broken on Windows: it links against `pthread`).
 
@@ -65,8 +58,10 @@ JVM flags live in `lt-up.bat`: `-Xms128m -Xmx512m -XX:+UseSerialGC`.
 
 | File | Role |
 |---|---|
-| `lt-watch.vbs` / `lt-watch.bat` | Invisible login watcher — starts the server when Zen appears |
+| `setup.ps1` | One-shot setup: Java, server download, `server.properties`, Startup shortcut, verification |
+| `reset.ps1` | Restarts the server and Zen (Zen is closed politely, never killed) |
+| `lt-watch.js` / `lt-watch.bat` | Invisible login watcher — starts the server when Zen appears |
 | `lt-up.bat` | Starts the server (idempotent: exits if already running) — JVM flags live here |
 | `fasttext/fasttext.exe` | Language detection binary (committed, Windows x64) |
 | `fasttext/lid.176.ftz` | Quantized language-ID model (committed) |
-| `server/`, `server.properties` | Local-only, gitignored |
+| `server/`, `server.properties` | Local-only, gitignored — created by `setup.ps1` |
