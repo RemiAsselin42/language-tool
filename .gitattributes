@@ -1,0 +1,2 @@
+# cmd.exe mishandles LF-only batch files (goto/labels): always check them out as CRLF
+*.bat text eol=crlf
